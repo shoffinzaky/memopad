@@ -112,18 +112,19 @@ async function store(){
         return;
     }
     console.log(data);
+
+    try{
     axios.post('api/notes', data)
-        .then(() => {
             console.log('data terkirim')
             inputs.forEach(input => {
                 input.value = '';
             });
 
-            fetchNotes()
-        })
-        .catch((error) => {
+            await fetchNotes()
+
+        }catch(error) {
             console.log('Error:', error);
-        });
+        };
 }
 
 async function fetchNotes(keyword = '') {
@@ -155,7 +156,7 @@ async function renderNotes(note){
     });
 }
 
-function update(id){
+async function update(id){
     const inputs = document.querySelectorAll('.edit-content');
     const data ={};
     
@@ -168,25 +169,30 @@ function update(id){
         return;
     }
     console.log(data);
-    axios.put(`/api/notes/${id}`, data)
-        .then(() => {
+
+    try{
+        axios.put(`/api/notes/${id}`, data)
             console.log('data terkirim')
             inputs.forEach(input => {
                 input.value = '';
             });
 
-            fetchNotes()
-        })
-        .catch((error) => {
+            await fetchNotes();
+
+        } catch(error) {
             console.log('Error:', error);
-        });
+        };
 }
 
-function destroy(id) {
-    axios.delete(`/api/notes/${id}`)
+async function destroy(id) {
+    try{
+        axios.delete(`/api/notes/${id}`)
         .then(() => {
             editModal.hide();
             fetchNotes();
         })
         .catch(error => console.log(error));
+    } catch (error){
+        console.log('Error deleting note', error);
+    }
 }
