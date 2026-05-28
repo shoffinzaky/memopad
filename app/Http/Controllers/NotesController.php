@@ -12,10 +12,38 @@ class NotesController extends Controller
     public function index(Request $request)
     {
         $search = $request->search;
-        $notes = Note::when($search, function($query) use ($search) {
-            $query->where('title', 'like', "%$search%")
-                ->orWhere('content', 'like', "%$search%");
-        })->latest('updated_at')->get();
+        $label = $request->label;
+        $status = $request->status; // 'archive', 'trash', or null/default
+
+        $query = Note::query();
+
+        // Status filter
+        if ($status === 'archive') {
+            $query->where('is_archived', true)->where('is_trashed', false);
+        } elseif ($status === 'trash') {
+            $query->where('is_trashed', true);
+        } else {
+            $query->where('is_archived', false)->where('is_trashed', false);
+        }
+
+        // Label filter
+        if ($label) {
+            $query->where('label', $label);
+        }
+
+        // Search filter
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('title', 'like', "%$search%")
+                  ->orWhere('content', 'like', "%$search%");
+            });
+        }
+
+        // Sorting: pinned first, then latest updated_at
+        $notes = $query->orderBy('is_pinned', 'desc')
+                      ->orderBy('updated_at', 'desc')
+                      ->get();
+
         return response()->json($notes);
     }
 
@@ -32,17 +60,20 @@ class NotesController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'title' => 'nullable|string',
             'content' => 'nullable|string',
+            'is_pinned' => 'nullable|boolean',
+            'reminder_at' => 'nullable|date',
+            'color' => 'nullable|string',
+            'label' => 'nullable|string',
+            'is_archived' => 'nullable|boolean',
+            'is_trashed' => 'nullable|boolean',
         ]);
 
-        $note = Note::create([
-            'title'=> $request->title,
-            'content'=>$request->content,
-        ]); 
+        $note = Note::create($data); 
 
-        return response()->json($note,201);
+        return response()->json($note, 201);
     }
 
     /**
@@ -66,16 +97,29 @@ class NotesController extends Controller
      */
     public function update(Request $request, string $id)
     {   
-        $request->validate([
+        $data = $request->validate([
             'title' => 'nullable|string',
             'content' => 'nullable|string',
+            'is_pinned' => 'nullable|boolean',
+            'reminder_at' => 'nullable|date',
+            'color' => 'nullable|string',
+            'label' => 'nullable|string',
+            'is_archived' => 'nullable|boolean',
+            'is_trashed' => 'nullable|boolean',
         ]);
 
-        $note = Note::find($id);
-        $note->update([
-            'title'=>$request->title,
-            'content'=>$request->content,
-        ]);
+        $note = Note::findOrFail($id);
+        
+        // Handle trashed_at timestamp
+        if (isset($data['is_trashed'])) {
+            if ($data['is_trashed'] && !$note->is_trashed) {
+                $data['trashed_at'] = now();
+            } elseif (!$data['is_trashed'] && $note->is_trashed) {
+                $data['trashed_at'] = null;
+            }
+        }
+
+        $note->update($data);
         return response()->json($note);
     }
 
@@ -84,7 +128,7 @@ class NotesController extends Controller
      */
     public function destroy(string $id)
     {
-        $note = Note::find($id);
+        $note = Note::findOrFail($id);
         $note->delete();
         return response()->json($note);
     }
